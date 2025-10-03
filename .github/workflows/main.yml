@@ -58,6 +58,8 @@ jobs:
       - uses: actions/checkout@v2
       - name: Generate
         run: sudo apt install lcov && cd src && make -f Makefile.linux-x86.mk coverage
+      - name: Codecov
+        run: bash <(curl -s https://codecov.io/bash) -f src/coverage/coverage-clean.info || echo "Codecov did not collect coverage reports"
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
