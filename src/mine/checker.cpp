@@ -119,7 +119,7 @@ check_result_t Checker::checkProgramExtended(Program program, Program existing,
   check_result_t result;
 
   // get the extended sequence and number of required terms
-  auto num_check = SequenceProgram::getNumCheckTerms(full_check);
+  auto num_check = full_check ? 100000 : 10000;
   auto num_required = SequenceProgram::getNumRequiredTerms(program);
   auto num_minimize = SequenceProgram::getNumMinimizationTerms(program);
   auto extended_seq = seq.getTerms(num_check);
