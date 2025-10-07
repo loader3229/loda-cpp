@@ -7,6 +7,7 @@
 *.obj
 *.pdb
 .DS_Store
+/src/.cache/
 /src/coverage/
 /src/loda
 /src/loda.exe
