@@ -6,6 +6,8 @@ To install or update LODA, please follow the [installation instructions](https:/
 
 * Improve submitted program checks
 * Internal tools for committing programs
+* Add internal `find-inceval-programs` command
+* Avoid cloning entire `git` history for programs
 
 ### v25.10.3
 
