@@ -256,6 +256,16 @@ int dispatch(Settings settings, const std::vector<std::string>& args) {
     commands.findSlow(settings.num_terms, type);
   } else if (cmd == "find-embseqs") {
     commands.findEmbseqs();
+  } else if (cmd == "find-inceval-programs") {
+    if (args.size() < 2) {
+      std::cerr << "Error: find-inceval-programs requires an error code argument" << std::endl;
+      std::cerr << "Usage: loda find-inceval-programs <error_code|range>" << std::endl;
+      std::cerr << "Examples:" << std::endl;
+      std::cerr << "  loda find-inceval-programs 1         # Find programs with error code 1" << std::endl;
+      std::cerr << "  loda find-inceval-programs 100-200   # Find programs with error codes 100-200" << std::endl;
+      return 1;
+    }
+    commands.findIncevalPrograms(args.at(1));
   } else if (cmd == "lists") {
     commands.lists();
   } else if (cmd == "compare") {
@@ -264,6 +274,14 @@ int dispatch(Settings settings, const std::vector<std::string>& args) {
     commands.replace(args.at(1), args.at(2));
   } else if (cmd == "auto-fold") {
     commands.autoFold();
+  } else if (cmd == "add-programs") {
+    size_t min_commit_count = 5;
+    if (args.size() > 1) {
+      min_commit_count = std::stoul(args.at(1));
+    }
+    commands.commitAddedPrograms(min_commit_count);
+  } else if (cmd == "update-programs") {
+    commands.commitUpdatedAndDeletedPrograms();
   }
 #endif
   // unknown command

@@ -1,5 +1,6 @@
 #include "cmd/commands.hpp"
 
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 
@@ -901,6 +902,101 @@ void Commands::findEmbseqs() {
                   " embedded sequence programs");
 }
 
+void Commands::findIncevalPrograms(const std::string& error_code) {
+  initLog(false);
+  Parser parser;
+  MineManager manager(settings);
+  manager.load();
+  
+  // Parse the error code argument (can be a single code or a range)
+  int64_t min_error_code, max_error_code;
+  auto pos = error_code.find('-');
+  if (pos != std::string::npos) {
+    // Range specified (e.g., "100-200")
+    min_error_code = std::stoll(error_code.substr(0, pos));
+    max_error_code = std::stoll(error_code.substr(pos + 1));
+  } else {
+    // Single error code
+    min_error_code = max_error_code = std::stoll(error_code);
+  }
+  
+  Log::get().info("Searching for programs with IncrementalEvaluator error code " + 
+                  error_code);
+  
+  // Load all programs
+  auto programs = manager.loadAllPrograms();
+  auto& stats = manager.getStats();
+  auto& program_ids = stats.all_program_ids;
+  const auto& sequences = manager.getSequences();
+  
+  // Create interpreter and incremental evaluator
+  Interpreter interpreter(settings);
+  IncrementalEvaluator inceval(interpreter);
+  
+  int64_t numChecked = 0;
+  
+  // Structure to hold results
+  struct Result {
+    UID id;
+    int64_t error_code_value;
+    std::string seq_name;
+    size_t program_size;
+  };
+  std::vector<Result> results;
+  
+  // Iterate through program IDs and programs together
+  auto id_it = program_ids.begin();
+  for (auto& program : programs) {
+    if (id_it == program_ids.end()) {
+      break;
+    }
+    auto id = *id_it;
+    ++id_it;
+    numChecked++;
+    
+    // Try to initialize the incremental evaluator
+    IncrementalEvaluator::ErrorCode code;
+    bool success = inceval.init(program, false, false, &code);
+    
+    // Check if it failed with an error code in the target range
+    int64_t error_code_value = static_cast<int64_t>(code);
+    if (!success && error_code_value >= min_error_code && 
+        error_code_value <= max_error_code) {
+      // Get the sequence name
+      std::string seq_name;
+      try {
+        auto seq = sequences.get(id);
+        seq_name = seq.name;
+      } catch (...) {
+        seq_name = "";
+      }
+      
+      // Store result for later sorting
+      results.push_back({id, error_code_value, seq_name, program.ops.size()});
+    }
+  }
+  
+  // Sort results by program size (number of operations), shortest first
+  std::sort(results.begin(), results.end(), 
+            [](const Result& a, const Result& b) {
+              return a.program_size < b.program_size;
+            });
+  
+  // Print sorted results
+  for (const auto& result : results) {
+    std::string msg = "Found program with code " + std::to_string(result.error_code_value) + 
+                      ": " + result.id.string();
+    if (!result.seq_name.empty()) {
+      msg += ": " + result.seq_name;
+    }
+    Log::get().info(msg);
+  }
+  
+  Log::get().info("Checked " + std::to_string(numChecked) + " programs");
+  Log::get().info("Found " + std::to_string(results.size()) + 
+                  " programs with error code " + error_code);
+}
+
 void Commands::lists() {
   initLog(false);
   MineManager manager(settings);
@@ -920,4 +1016,28 @@ void Commands::compare(const std::string& path1, const std::string& path2) {
   bool full_check = manager.isFullCheck(seq.id);
   Log::get().info(manager.getFinder().getChecker().compare(
       p1, p2, "First", "Second", seq, full_check, num_usages));
+}
+
+void Commands::commitAddedPrograms(size_t min_commit_count) {
+  initLog(true);
+  SequenceProgram::commitAddedPrograms(min_commit_count);
+}
+
+void Commands::commitUpdatedAndDeletedPrograms() {
+  initLog(true);
+  Stats stats;
+  try {
+    stats.load(Setup::getLodaHome() + "stats/");
+  } catch (const std::exception& e) {
+    std::cerr << "Could not load stats: " << e.what() << std::endl;
+  }
+  std::unordered_set<UID> full_check_list;
+  try {
+    const std::string full_check_path =
+        Setup::getProgramsHome() + "oeis/full_check.txt";
+    SequenceList::loadList(full_check_path, full_check_list);
+  } catch (const std::exception& e) {
+    std::cerr << "Could not load full_check list: " << e.what() << std::endl;
+  }
+  SequenceProgram::commitUpdateAndDeletedPrograms(&stats, &full_check_list);
 }
