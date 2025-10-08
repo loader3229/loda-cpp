@@ -25,6 +25,7 @@
 #include "mine/mutator.hpp"
 #include "seq/seq_list.hpp"
 #include "seq/seq_program.hpp"
+#include "seq/seq_util.hpp"
 #include "sys/file.hpp"
 #include "sys/log.hpp"
 #include "sys/setup.hpp"
@@ -264,7 +265,8 @@ void Commands::export_(const std::string& path) {
       auto offset = ProgramUtil::getOffset(program);
       inputUpperBound = Number(offset + settings.num_terms - 1);
     }
-    generator.annotate(program, inputUpperBound);
+    generator.setInputUpperBound(inputUpperBound);
+    generator.annotate(program);
     ProgramUtil::print(program, std::cout);
   } else if (format == "virseq") {
     ProgramUtil::removeOps(program, Operation::Type::NOP);
@@ -709,9 +711,10 @@ bool checkRange(const ManagedSequence& seq, const Program& program,
   auto terms = seq.getTerms(numTerms);
   Number inputUpperBound = finiteInput ? offset + numTerms - 1 : Number::INF;
   RangeGenerator generator;
+  generator.setInputUpperBound(inputUpperBound);
   RangeMap ranges;
   try {
-    if (!generator.generate(program, ranges, inputUpperBound)) {
+    if (!generator.generate(program, ranges)) {
       return false;
     }
   } catch (const std::exception& e) {
@@ -909,7 +912,6 @@ void Commands::extractVirseqs() {
   manager.load();
   auto& stats = manager.getStats();
   int64_t numExtracted = 0;
-  
   for (const auto& seq : manager.getSequences()) {
     if (!stats.all_program_ids.exists(seq.id)) {
       continue;
@@ -921,61 +923,74 @@ void Commands::extractVirseqs() {
       Log::get().warn(std::string(e.what()));
       continue;
     }
-    
-    auto virseqs = VirtualSequence::findVirtualSequencePrograms(program, 3, 1, 1);
+
+    auto virseqs =
+        VirtualSequence::findVirtualSequencePrograms(program, 3, 1, 1);
     if (virseqs.empty()) {
       continue;
     }
-    
+
     for (size_t i = 0; i < virseqs.size(); i++) {
       const auto& vs = virseqs[i];
-      
+
       // Extract the virtual sequence program
       Program extracted;
       for (int64_t pos = vs.start_pos; pos <= vs.end_pos; pos++) {
         extracted.ops.push_back(program.ops[pos]);
       }
-      
-      // Create output filename
-      std::string output_dir = Setup::getLodaHome() + "virseq" + FILE_SEP;
-      std::string output_file = output_dir + seq.id.string() + "_" + 
-                                std::to_string(i + 1) + ".asm";
-      
+
+      // Create output filename with same subdirectory structure as oeis
+      std::string base_dir = ProgramUtil::getProgramsDir('V');
+      std::string subdir = ProgramUtil::dirStr(seq.id);
+      std::string output_dir = base_dir + subdir + FILE_SEP;
+      std::string filename = seq.id.string();
+      if (virseqs.size() > 1) {
+        filename += "_" + std::to_string(i + 1);
+      }
+      filename += ".asm";
+      std::string output_file = output_dir + filename;
+
       // Write the extracted program to file
       ensureDir(output_file);
       std::ofstream out(output_file);
-      
-      // Add header comment
+
+      // Add header comment with sequence name
       Operation nop(Operation::Type::NOP);
-      nop.comment = "Virtual sequence " + std::to_string(i + 1) + 
-                    " extracted from " + seq.id.string();
+      std::string comment = "Virtual sequence";
+      if (virseqs.size() > 1) {
+        comment += " " + std::to_string(i + 1);
+      }
+      comment += " extracted from " + seq.string();
+      nop.comment = comment;
       extracted.ops.insert(extracted.ops.begin(), nop);
-      
-      // nop.comment = "Input: $" + std::to_string(vs.input_cell) + ", Output: $" + std::to_string(vs.output_cell);
-      // extracted.ops.insert(extracted.ops.begin() + 1, nop);
-      
       nop.comment.clear();
       extracted.ops.insert(extracted.ops.begin() + 1, nop);
 
-      Operation mov(Operation::Type::MOV);
-      mov.target = Operand(Operand::Type::DIRECT, vs.input_cell);
-      mov.source = Operand(Operand::Type::DIRECT, 0);
-      extracted.ops.insert(extracted.ops.begin() + 2, mov);
+      // Map input cell to Program::INPUT_CELL if needed
+      if (vs.input_cell != Program::INPUT_CELL) {
+        Operation mov(Operation::Type::MOV);
+        mov.target = Operand(Operand::Type::DIRECT, vs.input_cell);
+        mov.source = Operand(Operand::Type::DIRECT, Program::INPUT_CELL);
+        extracted.ops.insert(extracted.ops.begin() + 2, mov);
+      }
 
-      mov.target = Operand(Operand::Type::DIRECT, 0);
-      mov.source = Operand(Operand::Type::DIRECT, vs.output_cell);
-      extracted.ops.insert(extracted.ops.end(), mov);
+      // Map output cell to Program::OUTPUT_CELL if needed
+      if (vs.output_cell != Program::OUTPUT_CELL) {
+        Operation mov(Operation::Type::MOV);
+        mov.target = Operand(Operand::Type::DIRECT, Program::OUTPUT_CELL);
+        mov.source = Operand(Operand::Type::DIRECT, vs.output_cell);
+        extracted.ops.insert(extracted.ops.end(), mov);
+      }
 
       ProgramUtil::print(extracted, out);
       out.close();
-      
+
       numExtracted++;
-      Log::get().info("Extracted virtual sequence " + std::to_string(i + 1) + 
-                      " from " + seq.id.string() + " to " + output_file);
+      Log::get().info("Extracted virtual sequence from " + seq.string());
     }
   }
-  
-  Log::get().info("Extracted " + std::to_string(numExtracted) + 
+
+  Log::get().info("Extracted " + std::to_string(numExtracted) +
                   " virtual sequence programs");
 }
 
@@ -984,7 +999,7 @@ void Commands::findIncevalPrograms(const std::string& error_code) {
   Parser parser;
   MineManager manager(settings);
   manager.load();
-  
+
   // Parse the error code argument (can be a single code or a range)
   int64_t min_error_code, max_error_code;
   auto pos = error_code.find('-');
@@ -996,22 +1011,23 @@ void Commands::findIncevalPrograms(const std::string& error_code) {
     // Single error code
     min_error_code = max_error_code = std::stoll(error_code);
   }
-  
-  Log::get().info("Searching for programs with IncrementalEvaluator error code " + 
-                  error_code);
-  
+
+  Log::get().info(
+      "Searching for programs with IncrementalEvaluator error code " +
+      error_code);
+
   // Load all programs
   auto programs = manager.loadAllPrograms();
   auto& stats = manager.getStats();
   auto& program_ids = stats.all_program_ids;
   const auto& sequences = manager.getSequences();
-  
+
   // Create interpreter and incremental evaluator
   Interpreter interpreter(settings);
   IncrementalEvaluator inceval(interpreter);
-  
+
   int64_t numChecked = 0;
-  
+
   // Structure to hold results
   struct Result {
     UID id;
@@ -1020,7 +1036,7 @@ void Commands::findIncevalPrograms(const std::string& error_code) {
     size_t program_size;
   };
   std::vector<Result> results;
-  
+
   // Iterate through program IDs and programs together
   auto id_it = program_ids.begin();
   for (auto& program : programs) {
@@ -1030,14 +1046,14 @@ void Commands::findIncevalPrograms(const std::string& error_code) {
     auto id = *id_it;
     ++id_it;
     numChecked++;
-    
+
     // Try to initialize the incremental evaluator
     IncrementalEvaluator::ErrorCode code;
     bool success = inceval.init(program, false, false, &code);
-    
+
     // Check if it failed with an error code in the target range
     int64_t error_code_value = static_cast<int64_t>(code);
-    if (!success && error_code_value >= min_error_code && 
+    if (!success && error_code_value >= min_error_code &&
         error_code_value <= max_error_code) {
       // Get the sequence name
       std::string seq_name;
@@ -1047,30 +1063,31 @@ void Commands::findIncevalPrograms(const std::string& error_code) {
       } catch (...) {
         seq_name = "";
       }
-      
+
       // Store result for later sorting
       results.push_back({id, error_code_value, seq_name, program.ops.size()});
     }
   }
-  
+
   // Sort results by program size (number of operations), shortest first
-  std::sort(results.begin(), results.end(), 
+  std::sort(results.begin(), results.end(),
             [](const Result& a, const Result& b) {
               return a.program_size < b.program_size;
             });
-  
+
   // Print sorted results
   for (const auto& result : results) {
-    std::string msg = "Found program with code " + std::to_string(result.error_code_value) + 
-                      ": " + result.id.string();
+    std::string msg = "Found program with code " +
+                      std::to_string(result.error_code_value) + ": " +
+                      result.id.string();
     if (!result.seq_name.empty()) {
       msg += ": " + result.seq_name;
     }
     Log::get().info(msg);
   }
-  
+
   Log::get().info("Checked " + std::to_string(numChecked) + " programs");
-  Log::get().info("Found " + std::to_string(results.size()) + 
+  Log::get().info("Found " + std::to_string(results.size()) +
                   " programs with error code " + error_code);
 }
 
