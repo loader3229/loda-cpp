@@ -150,6 +150,7 @@ void Commands::update() {
   MineManager manager(settings);
   manager.update(true);
   manager.getStats();
+  manager.generateLists();
 }
 
 void Commands::upgrade() {

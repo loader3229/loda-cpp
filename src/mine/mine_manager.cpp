@@ -367,6 +367,26 @@ void MineManager::generateStats(int64_t age_in_days) {
                   " programs in " + buf.str() + "s");
 }
 
+// This is removed in main branch. But I (loader3229) need to still using this function to know which OEIS sequences has no LODA program
+void MineManager::generateLists() {
+  load();
+  getStats();
+  const std::string lists_home = SequenceList::getListsHome();
+  std::stringstream no_loda;
+  for (auto &s : sequences) {
+    if (s.id.number() == 0 || deny_list.find(s.id) != deny_list.end()) {
+      continue;
+    }
+    if (!stats->all_program_ids.exists(s.id)) {
+      no_loda << s.id.string() << ": " << s.name << "\n";
+    }
+  }
+
+  std::ofstream no_loda_file(lists_home + "no_loda.txt");
+  no_loda_file << no_loda.str();
+  no_loda_file.close();
+}
+
 void MineManager::cleanupListFiles() {
   const std::string lists_home = SequenceList::getListsHome();
   if (!isDir(lists_home)) {
@@ -384,12 +404,6 @@ void MineManager::cleanupListFiles() {
     if (std::remove(list_path.c_str()) == 0) {
       deleted_count++;
     }
-  }
-  
-  // Delete no_loda.txt
-  const std::string no_loda_path = lists_home + "no_loda.txt";
-  if (std::remove(no_loda_path.c_str()) == 0) {
-    deleted_count++;
   }
   
   if (deleted_count > 0) {
