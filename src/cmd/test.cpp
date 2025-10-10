@@ -983,7 +983,7 @@ void Test::oeisList() {
   map[UID('A', 7)] = 9;
   map[UID('A', 8)] = 4;
   auto copy = map;
-  SequenceList::mergeMap("test.txt", map);
+  SequenceList::mergeMap(SequenceList::getListsHome(), "test.txt", map);
   if (!map.empty()) {
     Log::get().error("unexpected map content", true);
   }
@@ -993,7 +993,7 @@ void Test::oeisList() {
   }
   std::map<UID, int64_t> delta;
   delta[UID('A', 7)] = 6;
-  SequenceList::mergeMap("test.txt", delta);
+  SequenceList::mergeMap(SequenceList::getListsHome(), "test.txt", delta);
   SequenceList::loadMap(path, map);
   copy[UID('A', 7)] = 15;
   if (map != copy) {
@@ -1191,8 +1191,9 @@ void Test::checkRanges(int64_t id, bool finite, const std::string& expected) {
   Log::get().info("Testing ranges for " + uid.string() + ": " + expected +
                   " with upper bound " + inputUpperBound.to_string());
   RangeGenerator generator;
+  generator.setInputUpperBound(inputUpperBound);
   RangeMap ranges;
-  if (!generator.generate(p, ranges, inputUpperBound)) {
+  if (!generator.generate(p, ranges)) {
     Log::get().error("Cannot generate range from program", true);
   }
   auto result = ranges.toString(Program::OUTPUT_CELL, "a(n)");
@@ -1384,9 +1385,10 @@ bool checkRange(const Sequence& seq, const Program& program, bool finiteInput) {
   auto offset = ProgramUtil::getOffset(program);
   Number inputUpperBound = finiteInput ? offset + seq.size() - 1 : Number::INF;
   RangeGenerator generator;
+  generator.setInputUpperBound(inputUpperBound);
   RangeMap ranges;
   try {
-    if (!generator.generate(program, ranges, inputUpperBound)) {
+    if (!generator.generate(program, ranges)) {
       return false;
     }
   } catch (const std::exception& e) {
