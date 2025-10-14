@@ -55,6 +55,16 @@
                 "kind": "test",
                 "isDefault": false
             }
+        },
+        {
+            "label": "test-minimizer",
+            "type": "shell",
+            "command": "loda test-minimizer",
+            "problemMatcher": [],
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            }
         }
     ]
 }
