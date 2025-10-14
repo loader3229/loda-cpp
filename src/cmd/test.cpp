@@ -1,5 +1,6 @@
 #include "cmd/test.hpp"
 
+#include <cstdlib>
 #include <deque>
 #include <fstream>
 #include <iomanip>
@@ -79,11 +80,18 @@ void Test::fast() {
 }
 
 void Test::slow() {
-  number();
-  randomNumber(100);
+  // External tool tests (only if environment variable is set)
+  if (std::getenv("LODA_TEST_WITH_EXTERNAL_TOOLS")) {
+    Log::get().info("Testing external tool evaluation");
+    checkFormulasWithExternalTools<PariFormula>("pari-function.txt", false);
+    checkFormulasWithExternalTools<PariFormula>("pari-vector.txt", true);
+    checkFormulasWithExternalTools<LeanFormula>("lean.txt", false);
+  }
   virtualEval();
   ackermann();
   stats();
+  number();
+  randomNumber(100);
   apiClient();  // requires API server
   oeisList();
   oeisSeq();
@@ -491,6 +499,79 @@ void Test::memory() {
       checkMemory(frag, length + 1, 0);
     }
   }
+
+  // Test new memory operations: fil, rol, ror
+  Memory mem;
+
+  // Test fil operation with positive length
+  mem.set(2, 7);
+  mem.fill(2, 4);
+  checkMemory(mem, 1, 0);  // unchanged
+  checkMemory(mem, 2, 7);  // $2,$3,$4,$5 := 7,7,7,7
+  checkMemory(mem, 3, 7);
+  checkMemory(mem, 4, 7);
+  checkMemory(mem, 5, 7);
+  checkMemory(mem, 6, 0);  // unchanged
+
+  // Test fil operation with negative length
+  mem.clear();
+  mem.set(7, 9);
+  mem.fill(7, -3);
+  checkMemory(mem, 4, 0);  // unchanged
+  checkMemory(mem, 5, 9);  // $5,$6,$7 := 9,9,9
+  checkMemory(mem, 6, 9);
+  checkMemory(mem, 7, 9);
+  checkMemory(mem, 8, 0);  // unchanged
+
+  // Test rol operation with positive length
+  mem.clear();
+  mem.set(2, 2);
+  mem.set(3, 3);
+  mem.set(4, 4);
+  mem.set(5, 5);
+  mem.rotateLeft(2, 4);
+  checkMemory(mem, 1, 0);  // unchanged
+  checkMemory(mem, 2, 3);  // $2,$3,$4,$5 := 3,4,5,2
+  checkMemory(mem, 3, 4);
+  checkMemory(mem, 4, 5);
+  checkMemory(mem, 5, 2);
+  checkMemory(mem, 6, 0);  // unchanged
+
+  // Test rol operation with negative length
+  mem.clear();
+  mem.set(6, 6);
+  mem.set(7, 7);
+  mem.set(8, 8);
+  mem.rotateLeft(8, -3);
+  checkMemory(mem, 5, 0);  // unchanged
+  checkMemory(mem, 6, 7);  // $6,$7,$8 := 7,8,6
+  checkMemory(mem, 7, 8);
+  checkMemory(mem, 8, 6);
+  checkMemory(mem, 9, 0);  // unchanged
+
+  // Test ror operation with positive length
+  mem.clear();
+  mem.set(10, 10);
+  mem.set(11, 11);
+  mem.set(12, 12);
+  mem.rotateRight(10, 3);
+  checkMemory(mem, 9, 0);    // unchanged
+  checkMemory(mem, 10, 12);  // $10,$11,$12 := 12,10,11
+  checkMemory(mem, 11, 10);
+  checkMemory(mem, 12, 11);
+  checkMemory(mem, 13, 0);  // unchanged
+
+  // Test ror operation with negative length
+  mem.clear();
+  mem.set(15, 15);
+  mem.set(16, 16);
+  mem.set(17, 17);
+  mem.rotateRight(17, -3);
+  checkMemory(mem, 14, 0);   // unchanged
+  checkMemory(mem, 15, 17);  // $15,$16,$17 := 17,15,16
+  checkMemory(mem, 16, 15);
+  checkMemory(mem, 17, 16);
+  checkMemory(mem, 18, 0);  // unchanged
 }
 
 void checkEnclosingLoop(const Program& p, int64_t begin, int64_t end,
@@ -1169,6 +1250,59 @@ void Test::checkFormulas(const std::string& testFile, FormulaType type) {
       if (pari.toString() != e.second) {
         Log::get().error("Unexpected PARI/GP code: " + pari.toString(), true);
       }
+    }
+  }
+}
+
+template <typename FormulaTypeClass>
+void Test::checkFormulasWithExternalTools(const std::string& testFile,
+                                          bool asVector) {
+  std::string path = std::string("tests") + FILE_SEP + std::string("formula") +
+                     FILE_SEP + testFile;
+  std::map<UID, std::string> map;
+  SequenceList::loadMapWithComments(path, map);
+  if (map.empty()) {
+    Log::get().error("Unexpected map content", true);
+  }
+  Parser parser;
+  FormulaGenerator generator;
+  Evaluator evaluator(settings, EVAL_ALL, false);
+  for (const auto& e : map) {
+    auto id = e.first;
+    auto idStr = id.string();
+    FormulaTypeClass formula_obj;
+    auto program = parser.parse(ProgramUtil::getProgramPath(id));
+    // generate formula code
+    Formula formula;
+    Sequence expSeq;
+    if (!generator.generate(program, id.number(), formula, true)) {
+      Log::get().error("Cannot generate formula", true);
+    }
+    if (!FormulaTypeClass::convert(formula, asVector, formula_obj)) {
+      Log::get().error("Cannot convert formula to " + formula_obj.getName(),
+                       true);
+    }
+    // evaluate LODA program
+    Log::get().info("Testing " + formula_obj.getName() + " for " + idStr +
+                    ": " + formula_obj.toString());
+    size_t numTerms = 12;
+    evaluator.eval(program, expSeq, numTerms);
+    if (expSeq.empty()) {
+      Log::get().error("Evaluation error", true);
+    }
+    // evaluate formula
+    auto offset = ProgramUtil::getOffset(program);
+    Sequence genSeq;
+    if (!formula_obj.eval(offset, numTerms, 10, genSeq)) {
+      Log::get().error(
+          formula_obj.getName() + " evaluation timeout for " + idStr, true);
+    }
+    // compare results
+    if (genSeq != expSeq) {
+      Log::get().info("Generated sequence: " + genSeq.to_string());
+      Log::get().info("Expected sequence:  " + expSeq.to_string());
+      Log::get().error("Unexpected " + formula_obj.getName() + " sequence",
+                       true);
     }
   }
 }
