@@ -33,11 +33,6 @@ bool Minimizer::minimize(Program& p, size_t num_terms) const {
 
   bool global_change = false;
 
-  // replace "clr" operations
-  if (replaceClr(p)) {
-    global_change = true;
-  }
-
   // replace constant loops
   for (int64_t exp = 1; exp <= 5; exp++) {
     if (replaceConstantLoop(p, target_sequence, exp)) {
@@ -91,9 +86,8 @@ bool Minimizer::minimize(Program& p, size_t num_terms) const {
           op.source.value != Number::ZERO) {
         int64_t base = getPowerOf(op.source.value);
         if (base != 0) {
-          std::unordered_set<int64_t> used_cells;
           int64_t largest_used = 0;
-          if (ProgramUtil::getUsedMemoryCells(p, used_cells, largest_used,
+          if (ProgramUtil::getUsedMemoryCells(p, nullptr, nullptr, largest_used,
                                               settings.max_memory)) {
             // try to replace gcd by a loop
             auto tmp = Operand(Operand::Type::DIRECT, largest_used + 1);
@@ -160,29 +154,6 @@ int64_t Minimizer::getPowerOf(const Number& v) {
     }
   }
   return 0;
-}
-
-bool Minimizer::replaceClr(Program& p) const {
-  bool replaced = false;
-  for (size_t i = 0; i < p.ops.size(); i++) {
-    auto& op = p.ops[i];
-    if (op.type == Operation::Type::CLR &&
-        op.target.type == Operand::Type::DIRECT &&
-        op.source.type == Operand::Type::CONSTANT) {
-      const int64_t length = op.source.value.asInt();
-      if (length > 0 && length <= 100) {  // magic number
-        op.type = Operation::Type::MOV;
-        op.source.value = 0;
-        auto mov = op;
-        for (int64_t j = 1; j < length; j++) {
-          mov.target.value = Semantics::add(mov.target.value, Number::ONE);
-          p.ops.insert(p.ops.begin() + i + j, mov);
-        }
-        replaced = true;
-      }
-    }
-  }
-  return replaced;
 }
 
 bool Minimizer::replaceConstantLoop(Program& p, const Sequence& seq,

@@ -1,7 +1,13 @@
 ## [Unreleased]
 
+### Features
+
+* Add memory operations: `fil`, `rol`, `ror`
+* Add limited LEAN export for simple programs
+
 ### Enhancements
 
+* Simplify formulas by replacing simple references to recursive functions
 * Removed deprecated list generation functionality
 
 ## v25.10.8
