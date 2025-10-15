@@ -5,6 +5,7 @@
 #include "form/expression_util.hpp"
 #include "form/formula_util.hpp"
 #include "seq/seq_util.hpp"
+#include "sys/util.hpp"
 
 bool convertToLean(Expression& expr, const Formula& f) {
   // Check children recursively
@@ -23,15 +24,39 @@ bool convertToLean(Expression& expr, const Formula& f) {
     case Expression::Type::NOT_EQUAL:
     case Expression::Type::LESS_EQUAL:
     case Expression::Type::GREATER_EQUAL: {
-      Expression f(Expression::Type::FUNCTION, "Bool.toInt ", {expr});
+      Expression f(Expression::Type::FUNCTION, "Bool.toInt", {expr});
       expr = f;
       break;
     }
-    case Expression::Type::FUNCTION:
-      // if (expr.name == "min" || expr.name == "max") {
-      //  break;
-      // }
+    case Expression::Type::FUNCTION: {
+      if (expr.name == "min" || expr.name == "max") {
+        break;
+      }
+      if (expr.name == "gcd") {
+        expr.name = "Int.gcd";
+        break;
+      }
+      // Convert floor and truncate functions to LEAN equivalents
+      if (expr.name == "floor" || expr.name == "truncate") {
+        // These functions should have a single FRACTION argument
+        if (expr.children.size() == 1 &&
+            expr.children[0].type == Expression::Type::FRACTION &&
+            expr.children[0].children.size() == 2) {
+          // Extract numerator and denominator from fraction
+          auto numerator = expr.children[0].children[0];
+          auto denominator = expr.children[0].children[1];
+          // Replace with Int.fdiv or Int.tdiv
+          expr.name = (expr.name == "floor") ? "Int.fdiv" : "Int.tdiv";
+          expr.children.clear();
+          expr.children.push_back(numerator);
+          expr.children.push_back(denominator);
+          break;
+        }
+        // If not a simple fraction, reject
+        return false;
+      }
       return false;
+    }
     case Expression::Type::POWER:
       // Support only non-negative constants as exponents
       if (expr.children.size() != 2 ||
@@ -88,7 +113,8 @@ std::string LeanFormula::toString() const {
   }
   bool usesParameter = mainExpr.contains(Expression::Type::PARAMETER);
   std::string arg = usesParameter ? "n" : "_";
-  buf << "def " << funcName << " (" << arg << " : Int) : Int := " << mainExpr;
+  buf << "def " << funcName << " (" << arg
+      << " : Int) : Int := " << mainExpr.toString(true);
   return buf.str();
 }
 
@@ -113,8 +139,9 @@ std::string LeanFormula::printEvalCode(int64_t offset, int64_t numTerms) const {
 
 bool LeanFormula::eval(int64_t offset, int64_t numTerms, int timeoutSeconds,
                        Sequence& result) const {
-  const std::string leanPath("loda-eval.lean");
-  const std::string leanResult("lean-result.txt");
+  const std::string tmpFileId = std::to_string(Random::get().gen() % 1000);
+  const std::string leanPath("lean-loda-" + tmpFileId + ".lean");
+  const std::string leanResult("lean-result-" + tmpFileId + ".txt");
   std::vector<std::string> args = {"lean", "--run", leanPath};
   std::string evalCode = printEvalCode(offset, numTerms);
   return SequenceUtil::evalFormulaWithExternalTool(
