@@ -236,6 +236,7 @@ void throwConversionError(const std::string& format) {
 void Commands::export_(const std::string& path) {
   initLog(true);
   Program program = SequenceProgram::getProgramAndSeqId(path).first;
+  auto offset = ProgramUtil::getOffset(program);
   const auto& format = settings.export_format;
   Formula formula;
   PariFormula pari_formula;
@@ -248,19 +249,19 @@ void Commands::export_(const std::string& path) {
     std::cout << formula.toString() << std::endl;
   } else if (format == "pari-function" || format == "pari") {
     if (!generator.generate(program, -1, formula, settings.with_deps) ||
-        !PariFormula::convert(formula, false, pari_formula)) {
+        !PariFormula::convert(formula, offset, false, pari_formula)) {
       throwConversionError(format);
     }
     std::cout << pari_formula.toString() << std::endl;
   } else if (format == "pari-vector") {
     if (!generator.generate(program, -1, formula, settings.with_deps) ||
-        !PariFormula::convert(formula, true, pari_formula)) {
+        !PariFormula::convert(formula, offset, true, pari_formula)) {
       throwConversionError(format);
     }
     std::cout << pari_formula.toString() << std::endl;
   } else if (format == "lean") {
     if (!generator.generate(program, -1, formula, settings.with_deps) ||
-        !LeanFormula::convert(formula, false, lean_formula)) {
+        !LeanFormula::convert(formula, offset, false, lean_formula)) {
       throwConversionError(format);
     }
     std::cout << lean_formula.toString() << std::endl;
@@ -296,16 +297,7 @@ void Commands::profile(const std::string& path) {
   auto micro_secs = std::chrono::duration_cast<std::chrono::microseconds>(
                         cur_time - start_time)
                         .count();
-  std::cout.setf(std::ios::fixed);
-  std::cout.precision(3);
-  if (micro_secs < 1000) {
-    std::cout << micro_secs << "µs" << std::endl;
-  } else if (micro_secs < 1000000) {
-    std::cout << static_cast<double>(micro_secs) / 1000.0 << "ms" << std::endl;
-  } else {
-    std::cout << static_cast<double>(micro_secs) / 1000000.0 << "s"
-              << std::endl;
-  }
+  std::cout << formatDuration(micro_secs) << std::endl;
 }
 
 void Commands::fold(const std::string& main_path, const std::string& sub_id) {
@@ -625,7 +617,8 @@ void testFormula(const std::string& test_id, const Settings& settings,
       if (!generator.generate(program, id.number(), formula, true)) {
         continue;
       }
-      if (!FormulaType::convert(formula, as_vector, formula_obj)) {
+      if (!FormulaType::convert(formula, ProgramUtil::getOffset(program),
+                                as_vector, formula_obj)) {
         continue;
       }
     } catch (const std::exception& e) {
@@ -896,6 +889,12 @@ void Commands::findSlow(int64_t num_terms, const std::string& type) {
   }
   Benchmark benchmark;
   benchmark.findSlow(num_terms, t);
+}
+
+void Commands::findSlowFormulas() {
+  initLog(false);
+  Benchmark benchmark;
+  benchmark.findSlowFormulas();
 }
 
 void Commands::findEmbseqs() {
