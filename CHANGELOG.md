@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+## v25.10.19
+
+### Bugfixes
+
+* Fix optimizer bug
+
 ### Features
 
 * Support memory operations in formula generation
@@ -8,6 +14,7 @@
 
 ### Enhancements
 
+* Add formula parser for parsing formulas from their string representation
 * Add internal command for finding programs with slow formula generation
 * Improve eval performance using optimized linker settings
 * Extend program stats with operation type bitmask
