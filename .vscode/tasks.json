@@ -75,6 +75,16 @@
                 "kind": "test",
                 "isDefault": false
             }
+        },
+        {
+            "label": "test-formula-parsing",
+            "type": "shell",
+            "command": "loda test-formula-parsing",
+            "problemMatcher": [],
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            }
         }
     ]
 }
