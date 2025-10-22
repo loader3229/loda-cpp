@@ -25,7 +25,7 @@ jobs:
         env:
           LODA_TEST_WITH_EXTERNAL_TOOLS: 1
       - name: Codecov
-        run: lcov --remove coverage.info 'cmd/benchmark.cpp' 'cmd/boinc.cpp' -o coverage_filtered.info && bash <(curl -s https://codecov.io/bash) -f src/coverage/coverage-clean.info -t ${{ secrets.CODECOV_TOKEN }} || echo "Codecov did not collect coverage reports"
+        run: lcov --remove src/coverage/coverage-clean.info 'cmd/benchmark.cpp' 'cmd/boinc.cpp' -o src/coverage/coverage-codecov.info && bash <(curl -s https://codecov.io/bash) -f src/coverage/coverage-codecov.info -t ${{ secrets.CODECOV_TOKEN }} || echo "Codecov did not collect coverage reports"
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
