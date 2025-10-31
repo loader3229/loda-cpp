@@ -13,6 +13,7 @@
 * Simplify geometric progressions in formula generation
 * Simplify generated expressions for `fac` operations
 * Add LEAN project support for testing
+* Replace boolean `hasBadConstant()` check with log2-based constant score for improved program simplicity comparison
 
 ## v25.10.19
 
