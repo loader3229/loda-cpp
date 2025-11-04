@@ -326,14 +326,16 @@ void MineManager::generateStats(int64_t age_in_days) {
       try {
         program = parser.parse(program_file);
         has_program = true;
-        has_formula =
-            !Comments::getCommentField(program, Comments::PREFIX_FORMULA)
-                 .empty();
+        std::string formula_str =
+            Comments::getCommentField(program, Comments::PREFIX_FORMULA);
+        has_formula = !formula_str.empty();
         submitter = Comments::getSubmitter(program);
+        int64_t offset = ProgramUtil::getOffset(program);
         ProgramUtil::removeOps(program, Operation::Type::NOP);
 
         // update stats
-        stats->updateProgramStats(s.id, program, submitter, has_formula);
+        stats->updateProgramStats(s.id, program, submitter, formula_str,
+                                  offset);
         num_processed++;
       } catch (const std::exception& exc) {
         Log::get().error(
@@ -627,7 +629,7 @@ void MineManager::alert(Program p, UID id, const std::string& prefix,
   if (!submitter.empty()) {
     std::string sub = Comments::PREFIX_SUBMITTED_BY + " " + submitter;
     msg += " " + sub;
-    full += ". " + sub;
+    full += ". " + escapeDiscordMarkdown(sub);
   }
   Log::AlertDetails details;
   details.title = seq.id.string();
