@@ -71,10 +71,10 @@ bool isSimpler(const Program& existing, const Program& optimized) {
   int64_t existing_score = getConstantScore(existing);
   int64_t optimized_score = getConstantScore(optimized);
   if (existing_score > optimized_score 
-   && existing_score > 10 // magic number
+   && existing_score > 15 // magic number
    && !optimized_has_seq) {
     return true;
-  } else if (!hasBadConstant(existing) && hasBadConstant(optimized)) {
+  } else if (optimized_score > existing_score && optimized_score > 15) {
     return false;
   }
   if (hasBadLoop(existing) && !hasBadLoop(optimized) && !optimized_has_seq) {
