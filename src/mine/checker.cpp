@@ -237,8 +237,7 @@ check_result_t Checker::checkProgramExtended(Program program, Program existing,
 	  num_check = std::max<size_t>(num_check, SequenceUtil::EXTENDED_SEQ_LENGTH);
 	  Sequence seq;
 	  evaluator.clearCaches();
-	  auto optimized_steps =
-	      evaluator.eval(result.program, seq, num_check, false);
+	  evaluator.eval(result.program, seq, num_check, false);
 	  if (Signals::HALT) {
 	    result.status = not_better;  // interrupted evaluation
 	  }
