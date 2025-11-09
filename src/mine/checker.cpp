@@ -98,6 +98,34 @@ bool isSimpler(const Program& existing, const Program& optimized) {
   return false;
 }
 
+// Return true if all constants used in the program are within [-100,100]
+bool hasOnlySmallConstants(const Program& p) {
+  auto constants = Constants::getAllConstants(p, true);
+  for (const auto& c : constants) {
+    if (c < Number(-100) || c > Number(100)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Check if optimized program is simpler for sequences with <=100 terms
+static bool isSimpler100(const Program& existing, const Program& optimized) {
+  // Compare usage of only small constants
+  bool existingHasSeq = ProgramUtil::hasOp(existing, Operation::Type::SEQ);
+  bool optimizedHasSeq = ProgramUtil::hasOp(optimized, Operation::Type::SEQ);
+  bool existingSmallConstants = hasOnlySmallConstants(existing);
+  bool optimizedSmallConstants = hasOnlySmallConstants(optimized);
+  if (optimizedSmallConstants && !existingSmallConstants && !optimizedHasSeq) {
+    return true;
+  }
+  if (existingSmallConstants && !optimizedSmallConstants && !existingHasSeq) {
+    return false;
+  }
+  // Otherwise prefer shorter programs
+  return optimized.ops.size() < existing.ops.size() && !optimizedHasSeq;
+}
+
 bool isBetterIncEval(const Program& existing, const Program& optimized,
                      Evaluator& evaluator) {
   // avoid overwriting programs w/o loops
@@ -361,6 +389,15 @@ std::string Checker::isOptimizedBetter(Program existing, Program optimized,
     return not_better;
   }
 
+  // "Simple 100" check
+  if (terms.size() <= 100) {
+    if (isSimpler100(existing, optimized)) {
+      return "Simpler";
+    } else if (isSimpler100(optimized, existing)) {
+      return not_better;
+    }
+  }
+
   // consider special evaluation modes only for programs that are not
   // used by many other programs and that don't require a full check
   if (!full_check && num_usages < 5) {  // magic number
@@ -377,6 +414,8 @@ std::string Checker::isOptimizedBetter(Program existing, Program optimized,
       return not_better;
     }
   }
+
+  // ======= EVALUATION CHECKS =========
 
   // check if the first decreasing/non-increasing term is beyond the known
   // sequence terms => fake "better" program
