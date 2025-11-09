@@ -1,17 +1,27 @@
 ## [Unreleased]
 
+### Enhancements
+
+* Support `fac` in LEAN formula generation
+* Improve LEAN formula generation for `pow`
+
+## v25.11.2
+
 ### Bugfixes
 
 * Fix escaping in generated Discord messages
 
 ### Features
 
+* Support multiple functions in LEAN formula generation
 * Support bitwise operations in LEAN formula generation
 
 ### Enhancements
 
 * Simplify geometric progressions in formula generation
 * Simplify generated expressions for `fac` operations
+* Improve optimization of `pow`,`nrt` operations
+* Extend program stats with LEAN & PARI flags
 * Add LEAN project support for testing
 * Replace boolean `hasBadConstant()` check with log2-based constant score for improved program simplicity comparison
 

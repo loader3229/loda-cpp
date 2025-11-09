@@ -23,19 +23,27 @@ std::string convertBitfuncToLean(const std::string& bitfunc) {
   return "";
 }
 
-bool LeanFormula::isLocalFunc(const std::string& funcName) const {
+bool LeanFormula::isLocalOrSeqFunc(const std::string& funcName) const {
   return std::find(funcNames.begin(), funcNames.end(), funcName) !=
-         funcNames.end();
+             funcNames.end() ||
+         UID::valid(funcName);
 }
 
-bool LeanFormula::convertToLean(Expression& expr, Number patternOffset,
-                                bool insideOfLocalFunc) {
+bool LeanFormula::needsIntToNat(const Expression& expr) const {
+  // Check if expression contains operations that return Int
+  return expr.contains(Expression::Type::FUNCTION, "Int.fdiv") ||
+         expr.contains(Expression::Type::FUNCTION, "Int.tdiv") ||
+         expr.contains(Expression::Type::FUNCTION, "Int.gcd");
+}
+
+bool LeanFormula::convertToLean(Expression& expr, int64_t offset,
+                                Number patternOffset, bool insideOfLocalFunc) {
   bool childInsideOfLocalFunc =
       insideOfLocalFunc ||
-      (expr.type == Expression::Type::FUNCTION && isLocalFunc(expr.name));
+      (expr.type == Expression::Type::FUNCTION && isLocalOrSeqFunc(expr.name));
   // Check children recursively
   for (auto& c : expr.children) {
-    if (!convertToLean(c, patternOffset, childInsideOfLocalFunc)) {
+    if (!convertToLean(c, offset, patternOffset, childInsideOfLocalFunc)) {
       return false;
     }
   }
@@ -43,8 +51,23 @@ bool LeanFormula::convertToLean(Expression& expr, Number patternOffset,
     case Expression::Type::IF:
     case Expression::Type::LOCAL:
     case Expression::Type::VECTOR:
-    case Expression::Type::FACTORIAL:
       return false;
+    case Expression::Type::FACTORIAL: {
+      if (expr.children.size() != 1) {
+        return false;
+      }
+      auto arg = expr.children[0];
+      if (ExpressionUtil::canBeNegative(arg, offset)) {
+        return false;
+      }
+      Expression toNat(Expression::Type::FUNCTION, "Int.toNat", {arg});
+      Expression factorial(Expression::Type::FUNCTION, "Nat.factorial",
+                           {toNat});
+      Expression result(Expression::Type::FUNCTION, "Int.ofNat", {factorial});
+      expr = result;
+      imports.insert("Mathlib.Data.Nat.Factorial.Basic");
+      break;
+    }
     case Expression::Type::EQUAL:
     case Expression::Type::NOT_EQUAL:
     case Expression::Type::LESS_EQUAL:
@@ -100,20 +123,39 @@ bool LeanFormula::convertToLean(Expression& expr, Number patternOffset,
         imports.insert("Mathlib.Data.Int.Bitwise");
         break;
       }
-      // Allow calls to locally defined functions incl. recursions
-      if (isLocalFunc(expr.name)) {
+      // Allow calls to locally defined functions and sequences
+      if (isLocalOrSeqFunc(expr.name)) {
+        // When domain is Nat, wrap arguments with Int.toNat to convert Int to
+        // Nat Only wrap if the argument needs it (contains Int-returning
+        // operations) or is not a plain PARAMETER
+        if (domain == "Nat") {
+          for (auto& arg : expr.children) {
+            if (arg.type != Expression::Type::PARAMETER && needsIntToNat(arg)) {
+              Expression toNat(Expression::Type::FUNCTION, "Int.toNat", {arg});
+              arg = toNat;
+            }
+          }
+        }
         break;
       }
       return false;
     }
-    case Expression::Type::POWER:
-      // Support only non-negative constants as exponents
-      if (expr.children.size() != 2 ||
-          expr.children[1].type != Expression::Type::CONSTANT ||
-          expr.children[1].value < Number::ZERO) {
+    case Expression::Type::POWER: {
+      // Support only non-negative exponents
+      if (expr.children.size() != 2) {
         return false;
       }
+      if (ExpressionUtil::canBeNegative(expr.children[1], offset)) {
+        return false;
+      }
+      // Wrap non-constant exponent with Int.toNat for LEAN compatibility
+      if (expr.children[1].type != Expression::Type::CONSTANT) {
+        Expression toNat(Expression::Type::FUNCTION, "Int.toNat",
+                         {expr.children[1]});
+        expr.children[1] = toNat;
+      }
       break;
+    }
     default:
       break;
   }
@@ -131,12 +173,12 @@ bool LeanFormula::convert(const Formula& formula, int64_t offset,
   lean_formula.domain = "Int";
   lean_formula.funcNames =
       FormulaUtil::getDefinitions(formula, Expression::Type::FUNCTION);
-  if (lean_formula.funcNames.size() != 1) {
+  if (lean_formula.funcNames.empty()) {
     return false;
   }
   for (const auto& f : lean_formula.funcNames) {
     if (FormulaUtil::isRecursive(formula, f)) {
-      if (offset < 0 ||
+      if (offset != 0 ||
           FormulaUtil::getMinimumBaseCase(formula, f) != Number::ZERO) {
         return false;
       }
@@ -166,7 +208,7 @@ bool LeanFormula::convert(const Formula& formula, int64_t offset,
         maxBaseCases.find(left.name) != maxBaseCases.end()) {
       patternOffset = maxBaseCases[left.name] + 1;
     }
-    if (!lean_formula.convertToLean(right, patternOffset, false)) {
+    if (!lean_formula.convertToLean(right, offset, patternOffset, false)) {
       return false;
     }
     lean_formula.main_formula.entries[left] = right;
@@ -176,12 +218,19 @@ bool LeanFormula::convert(const Formula& formula, int64_t offset,
 }
 
 std::string LeanFormula::toString() const {
-  std::string funcName;
-  for (const auto& entry : main_formula.entries) {
-    funcName = entry.first.name;
-    break;
+  auto functions = FormulaUtil::getDefinitions(main_formula);
+
+  std::stringstream buf;
+  if (functions.size() == 1) {
+    buf << printFunction(functions[0]);
+  } else {
+    buf << "mutual\n";
+    for (size_t i = 0; i < functions.size(); ++i) {
+      buf << "  " << printFunction(functions[i]) << "\n";
+    }
+    buf << "end";
   }
-  return printFunction(funcName);
+  return buf.str();
 }
 
 std::string LeanFormula::printFunction(const std::string& funcName) const {
@@ -192,8 +241,7 @@ std::string LeanFormula::printFunction(const std::string& funcName) const {
   // Map from base case constant value -> RHS expression. Using std::map
   // automatically keeps base cases sorted by the integer key.
   std::map<int64_t, Expression> baseCases;
-  Expression recursiveCase;
-  Expression recursiveRHS;
+  Expression generalRHS;
 
   for (const auto& entry : main_formula.entries) {
     if (entry.first.name != funcName) {
@@ -204,46 +252,33 @@ std::string LeanFormula::printFunction(const std::string& funcName) const {
       // store RHS keyed by the constant value; map keeps keys sorted
       baseCases[arg.value.asInt()] = entry.second;
     } else {
-      recursiveCase = entry.first;
-      recursiveRHS = entry.second;
+      generalRHS = entry.second;
     }
   }
 
-  const bool isRecursive = FormulaUtil::isRecursive(main_formula, funcName);
-  if (isRecursive) {
-    // Recursive case with base cases - use pattern matching syntax
-    buf << "def " << funcName << " : " << domain << " -> Int";
+  bool usesParameter = generalRHS.contains(Expression::Type::PARAMETER);
+  std::string arg = usesParameter ? "n" : "_";
 
-    // Generate pattern matching cases for base cases. The map is sorted by
-    // integer key so iteration yields increasing constant values.
+  // Recursive case with base cases - use pattern matching syntax
+  if (!baseCases.empty()) {
+    buf << "def " << funcName << " : " << domain << " -> Int";
     for (const auto& kv : baseCases) {
       const auto constValue = kv.first;
       buf << " | " << Number(constValue).to_string() << " => "
           << kv.second.toString(true);
     }
-
-    // Add the recursive case
-    if (!recursiveCase.name.empty()) {
-      // For Nat domain, use n+k pattern where k is one more than the largest
-      // base case
-      if (domain == "Nat" && !baseCases.empty()) {
-        // Find the largest base case value (map is ordered ascending)
-        int64_t maxBaseCase = baseCases.rbegin()->first;
-        int64_t patternOffset = maxBaseCase + 1;
-        buf << " | n+" << patternOffset << " => "
-            << recursiveRHS.toString(true);
-      } else {
-        buf << " | n => " << recursiveRHS.toString(true);
-      }
+    if (domain == "Nat" && !baseCases.empty()) {
+      int64_t maxBaseCase = baseCases.rbegin()->first;
+      int64_t patternOffset = maxBaseCase + 1;
+      buf << " | " << arg << "+" << patternOffset << " => "
+          << generalRHS.toString(true);
+    } else {
+      buf << " | " << arg << " => " << generalRHS.toString(true);
     }
   } else {
-    // Non-recursive case (original behavior)
-    bool usesParameter = recursiveRHS.contains(Expression::Type::PARAMETER);
-    std::string arg = usesParameter ? "n" : "_";
     buf << "def " << funcName << " (" << arg << " : " << domain
-        << ") : Int := " << recursiveRHS.toString(true);
+        << ") : Int := " << generalRHS.toString(true);
   }
-
   return buf.str();
 }
 
@@ -341,7 +376,7 @@ bool LeanFormula::initializeLeanProject() {
   // timeout). Use a larger timeout here because fetching mathlib and
   // preparing the toolchain can be slow on first run.
   std::vector<std::string> updateArgs = {"lake", "update"};
-  int updateTimeout = 300;  // 5 minutes
+  int updateTimeout = 600;  // 10 minutes
   int exitCode = execWithTimeout(updateArgs, updateTimeout, "", projectDir);
   if (exitCode != 0) {
     Log::get().warn("lake update failed with exit code " +
