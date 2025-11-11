@@ -252,6 +252,8 @@ check_result_t Checker::checkProgramExtended(Program program, Program existing,
   } else {
     // now we are in the "update" case
     // compare (minimized) program with existing programs
+    ProgramUtil::setOffset(existing, 0);
+    minimizer.optimizeAndMinimize(existing, num_minimize);
     result.status = isOptimizedBetter(existing, result.program, seq, full_check,
                                       num_usages);
   }
