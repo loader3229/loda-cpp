@@ -101,7 +101,7 @@ void ApiClient::postCPUHour() {
 void ApiClient::getOeisFile(const std::string& filename,
                             const std::string& local_path) {
   // throttling
-  if (fetched_oeis_files > 2) {
+  /* if (fetched_oeis_files > 2) {
     int64_t secs = std::chrono::duration_cast<std::chrono::seconds>(
                        std::chrono::steady_clock::now() - last_oeis_time)
                        .count();
@@ -113,7 +113,7 @@ void ApiClient::getOeisFile(const std::string& filename,
       std::this_thread::sleep_for(
           std::chrono::seconds(OEIS_THROTTLING_SECS - secs));
     }
-  }
+  } */
 
   // fetch file
   std::string url, ext;
