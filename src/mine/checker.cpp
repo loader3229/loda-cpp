@@ -198,7 +198,7 @@ check_result_t Checker::checkProgramExtended(Program program, Program existing,
   // auto-unfold seq operations
   Fold::autoUnfold(program);
 
-  ProgramUtil::setOffset(program, 0);
+  ProgramUtil::setOffset(program, ProgramUtil::getOffset(existing));
   // minimize based on number of terminating terms
   minimizer.optimizeAndMinimize(program, num_minimize);
   if (program != result.program) {
@@ -253,7 +253,6 @@ check_result_t Checker::checkProgramExtended(Program program, Program existing,
   } else {
     // now we are in the "update" case
     // compare (minimized) program with existing programs
-    ProgramUtil::setOffset(existing, 0);
     minimizer.optimizeAndMinimize(existing, num_minimize);
     result.status = isOptimizedBetter(existing, result.program, seq, full_check,
                                       num_usages);
