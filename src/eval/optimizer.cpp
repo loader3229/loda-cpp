@@ -161,12 +161,28 @@ bool Optimizer::mergeOps(Program &p) const {
         // first sub, the other max?
         else if (o1.type == Operation::Type::SUB &&
                  o2.type == Operation::Type::MAX &&
-                 o2.source.type == Operand::Type::CONSTANT &&
                  o2.source.value == 0) {
           o1.type = Operation::Type::TRN;
           do_merge = true;
         }
 
+        // first trn, second add?
+        else if (o1.type == Operation::Type::TRN &&
+                 o2.type == Operation::Type::ADD &&
+				 o1.source.value == o2.source.value) {
+          o1.type = Operation::Type::MAX;
+          do_merge = true;
+        }
+        
+        // first add, second trn?
+        else if (o1.type == Operation::Type::ADD &&
+		         o2.type == Operation::Type::TRN &&
+				 o1.source.value == o2.source.value) {
+          o1.type = Operation::Type::MAX;
+          o1.source = Operand(Operand::Type::CONSTANT, 0);
+          do_merge = true;
+        }
+        
         // first mul, second div?
         else if (o1.type == Operation::Type::MUL &&
                  o2.type == Operation::Type::DIV &&
@@ -189,9 +205,10 @@ bool Optimizer::mergeOps(Program &p) const {
                  o2.source.value > Number::ONE) {
           auto gcd = Semantics::gcd(o1.source.value, o2.source.value);
           auto new_o1_value = Semantics::div(o1.source.value, gcd);
+          auto new_o2_value = Semantics::div(o2.source.value, gcd);
           // Special case: if exponents are equal and result would be a no-op,
           // handle differently based on whether exponent is even or odd
-          if (new_o1_value == Number::ONE) {
+          if (new_o1_value == Number::ONE && new_o2_value == Number::ONE) {
             // If exponent is even: pow $0,k; nrt $0,k computes abs($0)
             // Replace with gcd $0,0 which is more efficient
             if (!o1.source.value.odd()) {
@@ -208,7 +225,7 @@ bool Optimizer::mergeOps(Program &p) const {
               if (gcd == o2.source.value) {
                 do_merge = true;
               } else if (gcd != Number::ONE) {
-                o2.source.value = Semantics::div(o2.source.value, gcd);
+                o2.source.value = new_o2_value;
                 updated = true;
               }
 		    }
@@ -225,7 +242,22 @@ bool Optimizer::mergeOps(Program &p) const {
           o1 = o2;
           do_merge = true;
         }
-
+        
+        // first add, second equ/neq/leq/geq?
+        else if (o1.type == Operation::Type::ADD &&
+          (o2.type == Operation::Type::EQU || o2.type == Operation::Type::NEQ || o2.type == Operation::Type::LEQ || o2.type == Operation::Type::GEQ)) {
+          o1.type = o2.type;
+          o1.source.value = Semantics::sub(o2.source.value, o1.source.value);
+          do_merge = true;
+        }
+        
+        // first sub, second equ/neq/leq/geq?
+        else if (o1.type == Operation::Type::SUB &&
+          (o2.type == Operation::Type::EQU || o2.type == Operation::Type::NEQ || o2.type == Operation::Type::LEQ || o2.type == Operation::Type::GEQ)) {
+          o1.type = o2.type;
+          o1.source.value = Semantics::add(o2.source.value, o1.source.value);
+          do_merge = true;
+        }
       }
 
       // sources the same direct access?
@@ -236,6 +268,19 @@ bool Optimizer::mergeOps(Program &p) const {
              o2.type == Operation::Type::SUB) ||
             (o1.type == Operation::Type::SUB &&
              o2.type == Operation::Type::ADD)) {
+          o1.source = Operand(Operand::Type::CONSTANT, 0);
+          do_merge = true;
+        }
+        
+        // first trn, second add?
+        else if (o1.type == Operation::Type::TRN && o2.type == Operation::Type::ADD) {
+          o1.type = Operation::Type::MAX;
+          do_merge = true;
+        }
+        
+        // first add, second trn?
+        else if (o1.type == Operation::Type::ADD && o2.type == Operation::Type::TRN) {
+          o1.type = Operation::Type::MAX;
           o1.source = Operand(Operand::Type::CONSTANT, 0);
           do_merge = true;
         }
@@ -274,6 +319,7 @@ bool Optimizer::mergeOps(Program &p) const {
         o1.type = Operation::Type::NEQ;
         do_merge = true;
       }
+      
     }
 
     // merge (erase second operation)
