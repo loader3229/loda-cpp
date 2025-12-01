@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+### Enhancements
+
+* Integrate `libcurl` for HTTP requests, replacing external `curl`/`wget` tools
+* Integrate `zlib` for gzip decompression, replacing external `gzip`/`gunzip` tools
+* Report broken b-files to LODA API server for automatic cache invalidation
+
 ## v25.11.29
 
 ### Enhancements

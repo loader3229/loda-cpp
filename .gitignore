@@ -20,3 +20,5 @@
 pari-loda-*.gp
 _codeql_detected_source_root
 /openapi.v2.yaml
+vcpkg_installed
+installed
