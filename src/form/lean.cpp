@@ -172,6 +172,13 @@ bool LeanFormula::convert(const Formula& formula, int64_t offset,
   if (as_vector) {
     return false;
   }
+
+  // Check for mutual recursion - LEAN can't prove termination automatically
+  // for mutually recursive functions without explicit termination proofs
+  if (FormulaUtil::hasMutualRecursion(formula)) {
+    return false;
+  }
+
   lean_formula = {};
   lean_formula.domain = "Int";
   lean_formula.funcNames =
@@ -358,6 +365,12 @@ bool LeanFormula::initializeLeanProject() {
   if (isFile(lakeFilePath)) {
     initialized = true;
     return true;
+  }
+
+  // If directory exists but lakefile doesn't, clean up incomplete initialization
+  if (isDir(projectDir)) {
+    Log::get().info("Removing incomplete LEAN project at " + projectDir);
+    rmDirRecursive(projectDir);
   }
 
   Log::get().info("Initializing LEAN project at " + projectDir);

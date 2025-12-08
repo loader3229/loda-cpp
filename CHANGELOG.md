@@ -1,10 +1,22 @@
 ## [Unreleased]
 
+### Bugfixes
+
+* Fix `test-lean` failure when LEAN project directory exists but is incomplete
+
+## v25.12.1
+
 ### Enhancements
 
 * Integrate `libcurl` for HTTP requests, replacing external `curl`/`wget` tools
 * Integrate `zlib` for gzip decompression, replacing external `gzip`/`gunzip` tools
 * Report broken b-files to LODA API server for automatic cache invalidation
+* Add internal `export-formulas` command to export all program formulas to a file or stdout
+
+### Bugfixes
+
+* Fix PARI evaluation error for formulas with constant identity functions (e.g., A026765)
+* Fix LEAN evaluation error for formulas with mutually recursive functions that are not self-recursive (e.g., A001636)
 
 ## v25.11.29
 
