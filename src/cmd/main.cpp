@@ -250,6 +250,12 @@ int dispatch(Settings settings, const std::vector<std::string>& args) {
   } else if (cmd == "test-minimizer") {
     Test test;
     test.minimizer(10000);
+  } else if (cmd == "test-recursion") {
+    std::string id;
+    if (args.size() > 1) {
+      id = args.at(1);
+    }
+    commands.testRecursion(id);
   } else if (cmd == "generate" || cmd == "gen") {
     commands.generate();
   } else if (cmd == "migrate") {
