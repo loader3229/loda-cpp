@@ -79,9 +79,9 @@
             }
         },
         {
-            "label": "test-formula-parsing",
+            "label": "test-recursion",
             "type": "shell",
-            "command": "loda test-formula-parsing",
+            "command": "loda test-recursion",
             "problemMatcher": [],
             "group": {
                 "kind": "test",
