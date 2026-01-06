@@ -87,6 +87,16 @@
                 "kind": "test",
                 "isDefault": false
             }
+        },
+        {
+            "label": "test-vireval",
+            "type": "shell",
+            "command": "loda test-vireval",
+            "problemMatcher": [],
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            }
         }
     ]
 }
