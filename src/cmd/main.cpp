@@ -3,6 +3,7 @@
 #include <thread>
 
 #include "cmd/commands.hpp"
+#include "cmd/test.hpp"
 #include "mine/api_client.hpp"
 #include "sys/file.hpp"
 #include "sys/log.hpp"
@@ -246,6 +247,9 @@ int dispatch(Settings settings, const std::vector<std::string>& args) {
       id = args.at(1);
     }
     commands.testRange(id);
+  } else if (cmd == "test-minimizer") {
+    Test test;
+    test.minimizer(10000);
   } else if (cmd == "test-recursion") {
     std::string id;
     if (args.size() > 1) {

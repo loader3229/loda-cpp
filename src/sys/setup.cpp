@@ -182,7 +182,7 @@ void Setup::cloneProgramsHome(const std::string& git_url) {
 }
 
 bool Setup::pullProgramsHome(bool fail_on_error) {
-  return Git::git(getProgramsHome(), "pull origin main -q", fail_on_error);
+  return Git::git(getProgramsHome(), "pull test main -q", fail_on_error);
 }
 
 void Setup::checkDir(const std::string& home) {

@@ -1,6 +1,6 @@
 {
     "C_Cpp.clang_format_style": "Google",
-    "editor.formatOnSave": true,
+    "editor.formatOnSave": false,
     "files.associations": {
         "map": "cpp",
         "chrono": "cpp",

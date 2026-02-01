@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ ldr ]
   pull_request:
-    branches: [ main ]
+    branches: [ ldr ]
   workflow_dispatch:
 
 jobs:
@@ -63,6 +63,7 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@v1
       - name: Install dependencies
         run: |
+          del vcpkg.json
           vcpkg install curl:x64-windows
       - name: Build
         run: cd src && nmake.exe /F Makefile.windows.mk
@@ -79,6 +80,7 @@ jobs:
           arch: amd64_arm64
       - name: Install dependencies
         run: |
+          del vcpkg.json
           vcpkg install curl:arm64-windows
       - name: Build
         run: cd src && nmake.exe /F Makefile.windows.mk

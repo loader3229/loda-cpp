@@ -20,8 +20,7 @@ ApiClient::ApiClient()
       start(0),
       count(0),
       fetched_oeis_files(0),
-      last_oeis_time(std::chrono::steady_clock::now()),
-      printed_throttling_warning(false) {
+      last_oeis_time(std::chrono::steady_clock::now()) {
   auto server = Setup::getSetupValue("LODA_API_SERVER");
   if (server.empty()) {
     server = "https://api.loda-lang.org/";
@@ -131,7 +130,7 @@ void ApiClient::reportBrokenBFile(const UID& id) {
 void ApiClient::getOeisFile(const std::string& filename,
                             const std::string& local_path) {
   // throttling
-  if (fetched_oeis_files > 2) {
+  /* if (fetched_oeis_files > 2) {
     int64_t secs = std::chrono::duration_cast<std::chrono::seconds>(
                        std::chrono::steady_clock::now() - last_oeis_time)
                        .count();
@@ -143,7 +142,7 @@ void ApiClient::getOeisFile(const std::string& filename,
       std::this_thread::sleep_for(
           std::chrono::seconds(OEIS_THROTTLING_SECS - secs));
     }
-  }
+  } */
 
   // fetch file
   std::string url, ext;
