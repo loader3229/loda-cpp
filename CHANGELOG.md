@@ -106,6 +106,7 @@
 * Improve optimization of `pow`,`nrt` operations
 * Extend program stats with LEAN & PARI flags
 * Add LEAN project support for testing
+* Replace boolean `hasBadConstant()` check with log2-based constant score for improved program simplicity comparison
 
 ## v25.10.19
 

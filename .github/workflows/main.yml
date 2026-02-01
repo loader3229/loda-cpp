@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ ldr ]
+    branches: [ ldr-2 ]
   pull_request:
-    branches: [ ldr ]
+    branches: [ ldr-2 ]
   workflow_dispatch:
 
 jobs:
