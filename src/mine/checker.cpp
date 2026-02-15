@@ -156,7 +156,7 @@ check_result_t Checker::checkProgramExtended(Program program, Program existing,
   check_result_t result;
 
   // get the extended sequence and number of required terms
-  auto num_check = SequenceProgram::getNumCheckTerms(full_check);
+  auto num_check = full_check ? 100000 : 10000;
   auto num_required = SequenceProgram::getNumRequiredTerms(program);
   auto num_minimize = SequenceProgram::getNumMinimizationTerms(program);
   auto extended_seq = seq.getTerms(num_check);
@@ -204,6 +204,33 @@ check_result_t Checker::checkProgramExtended(Program program, Program existing,
   if (is_new) {
     // no additional checks needed for new programs
     result.status = "Found";
+    static const std::string not_better;
+    
+	  // ======= EVALUATION CHECKS =========
+	
+	  // get extended sequence
+	  auto num_check = 100000;
+	  auto terms = seq.getTerms(num_check);
+	  if (terms.empty()) {
+	    Log::get().error("Error fetching b-file for " + seq.id.string(), true);
+	  }
+	
+	  // evaluate optimized program for fixed number of terms
+	  num_check = std::min<size_t>(num_check, terms.size());
+	  num_check = std::max<size_t>(num_check, SequenceUtil::EXTENDED_SEQ_LENGTH);
+	  Sequence seq;
+	  evaluator.clearCaches();
+	  evaluator.eval(result.program, seq, num_check, false);
+	  if (Signals::HALT) {
+	    result.status = not_better;  // interrupted evaluation
+	  }
+	  
+	  // check correctness of the optimized program
+	  size_t num_checked_terms = std::min(terms.size(), seq.size());
+	  if (seq.subsequence(0, num_checked_terms) !=
+	      terms.subsequence(0, num_checked_terms)) {
+	    result.status = not_better;
+	  }
   } else {
     // now we are in the "update" case
     // compare (minimized) program with existing programs
@@ -225,6 +252,10 @@ check_result_t Checker::checkProgramBasic(const Program& program,
                                           const std::string& submitter,
                                           size_t previous_hash, bool full_check,
                                           size_t num_usages) {
+                                          	
+return checkProgramExtended(program, existing, is_new, seq, full_check,
+                                  num_usages);
+                                  
   static const std::string first = "Found";
   check_result_t result;  // empty string indicates no update
 
@@ -307,17 +338,37 @@ std::string Checker::isOptimizedBetter(Program existing, Program optimized,
     return not_better;
   }
 
+  // ======= EVALUATION CHECKS =========
+
+  // get extended sequence
+  auto num_check = 100000;
+  auto terms = seq.getTerms(num_check);
+  if (terms.empty()) {
+    Log::get().error("Error fetching b-file for " + seq.id.string(), true);
+  }
+
+  // evaluate optimized program for fixed number of terms
+  num_check = std::min<size_t>(num_check, terms.size());
+  num_check = std::max<size_t>(num_check, SequenceUtil::EXTENDED_SEQ_LENGTH);
+  Sequence optimized_seq, existing_seq;
+  evaluator.clearCaches();
+  auto optimized_steps =
+      evaluator.eval(optimized, optimized_seq, num_check, false);
+  if (Signals::HALT) {
+    return not_better;  // interrupted evaluation
+  }
+  
+  // check correctness of the optimized program
+  size_t num_checked_terms = std::min(terms.size(), optimized_seq.size());
+  if (optimized_seq.subsequence(0, num_checked_terms) !=
+      terms.subsequence(0, num_checked_terms)) {
+    return not_better;
+  }
+  
   if (isSimpler(existing, optimized)) {
     return "Simpler";
   } else if (isSimpler(optimized, existing)) {
     return not_better;
-  }
-
-  // get extended sequence terms
-  auto num_check = SequenceProgram::getNumCheckTerms(full_check);
-  auto terms = seq.getTerms(num_check);
-  if (terms.empty()) {
-    Log::get().error("Error fetching b-file for " + seq.id.string(), true);
   }
 
   // "Simple 100" check
@@ -346,19 +397,6 @@ std::string Checker::isOptimizedBetter(Program existing, Program optimized,
     }
   }
 
-  // ======= EVALUATION CHECKS =========
-
-  // evaluate optimized program for fixed number of terms
-  num_check = std::min<size_t>(num_check, terms.size());
-  num_check = std::max<size_t>(num_check, SequenceUtil::EXTENDED_SEQ_LENGTH);
-  Sequence optimized_seq, existing_seq;
-  evaluator.clearCaches();
-  auto optimized_steps =
-      evaluator.eval(optimized, optimized_seq, num_check, false);
-  if (Signals::HALT) {
-    return not_better;  // interrupted evaluation
-  }
-
   // check if the first decreasing/non-increasing term is beyond the known
   // sequence terms => fake "better" program
   const int64_t s = terms.size();
@@ -374,14 +412,7 @@ std::string Checker::isOptimizedBetter(Program existing, Program optimized,
   if (Signals::HALT) {
     return not_better;  // interrupted evaluation
   }
-
-  // check correctness of the optimized program
-  size_t num_checked_terms = std::min(terms.size(), optimized_seq.size());
-  if (optimized_seq.subsequence(0, num_checked_terms) !=
-      terms.subsequence(0, num_checked_terms)) {
-    return not_better;
-  }
-
+  
   // check correctness of the existing program
   num_checked_terms = std::min(terms.size(), existing_seq.size());
   if (existing_seq.subsequence(0, num_checked_terms) !=
