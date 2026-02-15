@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 
@@ -377,6 +378,27 @@ std::string formatDuration(int64_t microseconds) {
   return buf.str();
 }
 
+std::string formatBytes(size_t bytes) {
+  static const char* kUnits[] = {"B", "KB", "MB", "GB", "TB", "PB"};
+  size_t unit_index = 0;
+  double value = static_cast<double>(bytes);
+  while (value >= 1024.0 &&
+         unit_index + 1 < (sizeof(kUnits) / sizeof(*kUnits))) {
+    value /= 1024.0;
+    ++unit_index;
+  }
+  std::stringstream buf;
+  if (value < 10.0) {
+    buf << std::fixed << std::setprecision(2);
+  } else if (value < 100.0) {
+    buf << std::fixed << std::setprecision(1);
+  } else {
+    buf << std::fixed << std::setprecision(0);
+  }
+  buf << value << " " << kUnits[unit_index];
+  return buf.str();
+}
+
 std::string escapeDiscordMarkdown(const std::string& str) {
   std::string result;
   // Reserve extra space to avoid reallocations when escaping special characters
@@ -384,8 +406,8 @@ std::string escapeDiscordMarkdown(const std::string& str) {
   for (char c : str) {
     // Escape Discord markdown special characters: * _ ~ ` | >
     // Backslash itself needs to be escaped first
-    if (c == '\\' || c == '*' || c == '_' || c == '~' || c == '`' ||
-        c == '|' || c == '>') {
+    if (c == '\\' || c == '*' || c == '_' || c == '~' || c == '`' || c == '|' ||
+        c == '>') {
       result += '\\';
     }
     result += c;
@@ -393,45 +415,15 @@ std::string escapeDiscordMarkdown(const std::string& str) {
   return result;
 }
 
-std::string escapeJsonString(const std::string& str) {
-  std::string result;
-  // Reserve extra space to avoid reallocations when escaping special characters
-  result.reserve(str.size() * 2);
-  for (char c : str) {
-    // Escape JSON special characters according to RFC 8259
-    switch (c) {
-      case '"':
-        result += "\\\"";
-        break;
-      case '\\':
-        result += "\\\\";
-        break;
-      case '\b':
-        result += "\\b";
-        break;
-      case '\f':
-        result += "\\f";
-        break;
-      case '\n':
-        result += "\\n";
-        break;
-      case '\r':
-        result += "\\r";
-        break;
-      case '\t':
-        result += "\\t";
-        break;
-      default:
-        // For control characters (0x00-0x1F), use \uXXXX format
-        if (static_cast<unsigned char>(c) < 0x20) {
-          char buf[7];
-          snprintf(buf, sizeof(buf), "\\u%04x", static_cast<unsigned char>(c));
-          result += buf;
-        } else {
-          result += c;
-        }
-        break;
+bool startsWithIgnoreCase(const std::string& str, const std::string& prefix) {
+  if (str.size() < prefix.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < prefix.size(); ++i) {
+    if (std::tolower(static_cast<unsigned char>(str[i])) !=
+        std::tolower(static_cast<unsigned char>(prefix[i]))) {
+      return false;
     }
   }
-  return result;
+  return true;
 }

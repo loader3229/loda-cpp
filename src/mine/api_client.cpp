@@ -31,7 +31,6 @@ ApiClient::ApiClient()
   if (server.back() != '/') {
     server += '/';
   }
-  base_url = server + "miner/v1/";
   base_url_v2 = server + "v2/";
   oeis_fetch_direct = Setup::getSetupFlag("LODA_OEIS_FETCH_DIRECT", false);
 }
@@ -41,51 +40,46 @@ ApiClient& ApiClient::getDefaultInstance() {
   return api_client;
 }
 
-std::string ApiClient::toJson(const Program& program){
+std::string ApiClient::toJson(const Program& program) {
   const std::string id = Comments::getSequenceIdFromProgram(program);
   const std::string submitter = Comments::getSubmitter(program);
-  const std::string change_type = Comments::getCommentField(program, Comments::PREFIX_CHANGE_TYPE);
-  const std::string mode = ((change_type == "" || change_type == "Found") ? "add" : "update");
+  const std::string change_type =
+      Comments::getCommentField(program, Comments::PREFIX_CHANGE_TYPE);
+  const std::string mode =
+      ((change_type == "" || change_type == "Found") ? "add" : "update");
   const std::string type = "program";
   std::ostringstream oss;
   ProgramUtil::print(program, oss);
   const std::string content = oss.str();
-  return "{\"id\":\"" + escapeJsonString(id) + "\","
-         "\"submitter\":\"" + escapeJsonString(submitter) + "\","
-         "\"mode\":\"" + escapeJsonString(mode) + "\","
-         "\"type\":\"" + escapeJsonString(type) + "\","
-         "\"content\":\"" + escapeJsonString(content) + "\"}";
+
+  jute::jValue json(jute::JOBJECT);
+  json.set_property_string("id", id);
+  json.set_property_string("submitter", submitter);
+  json.set_property_string("mode", mode);
+  json.set_property_string("type", type);
+  json.set_property_string("content", content);
+  return json.to_string(true);
 }
 
 void ApiClient::postProgram(const Program& program, size_t max_buffer) {
-  // attention: curl sometimes has problems with absolute paths.
-  // so we use a relative path here!
-  const std::string tmp = "post_program_" + std::to_string(client_id) + ".json";
   out_queue.push_back(program);
   while (!out_queue.empty()) {
-    {
-      std::ofstream out(tmp);
-      out << toJson(out_queue.back());
-      out.close();
-    }
-    if (postSubmission(tmp, out_queue.size() > max_buffer)) {
+    const std::string content = toJson(out_queue.back());
+    if (postSubmission(content, out_queue.size() > max_buffer)) {
       out_queue.pop_back();
     } else {
       break;
     }
   }
-  std::remove(tmp.c_str());
 }
 
-bool ApiClient::postSubmission(const std::string& path, bool fail_on_error) {
-  if (!isFile(path)) {
-    Log::get().error("File not found: " + path, true);
-  }
+bool ApiClient::postSubmission(const std::string& content, bool fail_on_error) {
   const std::string url = base_url_v2 + "submissions";
-  if (!WebClient::postFile(url, path)) {
+  const std::vector<std::string> headers = {"Content-Type: application/json"};
+  if (!WebClient::postContent(url, content, {}, headers)) {
     const std::string msg("Cannot submit program to API server");
     if (fail_on_error) {
-      if (!WebClient::postFile(url, path, {}, {}, true)) {
+      if (!WebClient::postContent(url, content, {}, headers, true)) {
         Log::get().error(msg, true);
       }
     } else {
@@ -97,24 +91,21 @@ bool ApiClient::postSubmission(const std::string& path, bool fail_on_error) {
 }
 
 void ApiClient::postCPUHour() {
-  const auto tmp_file_id = Random::get().gen() % 1000;
-  // attention: curl sometimes has problems with absolute paths.
-  // so we use a relative path here!
-  // TODO: extend WebClient::postFile to support content directly
-  const std::string tmp_file =
-      "loda_usage_" + std::to_string(tmp_file_id) + ".json";
-  std::ofstream out(tmp_file);
-  out << "{\"version\":\"" << Version::VERSION << "\", \"platform\":\""
-      << Version::PLATFORM << "\", \"cpuHours\":1" << "}\n";
-  out.close();
+  jute::jValue json(jute::JOBJECT);
+  json.set_property_string("version", Version::VERSION);
+  json.set_property_string("platform", Version::PLATFORM);
+  jute::jValue cpu_hours(jute::JNUMBER);
+  cpu_hours.set_string("1");
+  json.add_property("cpuHours", cpu_hours);
+
+  const std::string content = json.to_string(true) + "\n";
   const std::vector<std::string> headers = {"Content-Type: application/json"};
-  const std::string url = base_url + "cpuhours";
-  if (!WebClient::postFile(url, tmp_file, {}, headers)) {
-    WebClient::postFile(url, tmp_file, {}, headers,
-                        true);  // for debugging
+  const std::string url = base_url_v2 + "stats/cpuhours";
+  if (!WebClient::postContent(url, content, {}, headers)) {
+    WebClient::postContent(url, content, {}, headers,
+                           true);  // for debugging
     Log::get().error("Error reporting usage", false);
   }
-  std::remove(tmp_file.c_str());
 }
 
 void ApiClient::reportBrokenBFile(const UID& id) {
@@ -122,22 +113,19 @@ void ApiClient::reportBrokenBFile(const UID& id) {
   if (id.domain() != 'A') {
     return;
   }
-  const auto tmp_file_id = Random::get().gen() % 1000;
-  // attention: curl sometimes has problems with absolute paths.
-  // so we use a relative path here!
-  const std::string tmp_file =
-      "loda_bfile_removal_" + std::to_string(tmp_file_id) + ".json";
-  std::ofstream out(tmp_file);
-  out << "{\"id\":\"" << escapeJsonString(id.string())
-      << "\",\"mode\":\"remove\",\"type\":\"bfile\"}\n";
-  out.close();
+
+  jute::jValue json(jute::JOBJECT);
+  json.set_property_string("id", id.string());
+  json.set_property_string("mode", "remove");
+  json.set_property_string("type", "bfile");
+
+  const std::string content = json.to_string(true) + "\n";
   const std::string url = base_url_v2 + "submissions";
-  if (!WebClient::postFile(url, tmp_file)) {
+  if (!WebClient::postContent(url, content)) {
     Log::get().warn("Failed to report broken b-file for " + id.string());
   } else {
     Log::get().info("Reported broken b-file for " + id.string());
   }
-  std::remove(tmp_file.c_str());
 }
 
 void ApiClient::getOeisFile(const std::string& filename,
@@ -172,7 +160,7 @@ void ApiClient::getOeisFile(const std::string& filename,
     }
   } else {
     ext = ".gz";
-    url = base_url + "oeis/" + filename + ext;
+    url = base_url_v2 + "sequences/data/oeis/" + filename + ext;
   }
 
   bool success = false;
@@ -258,7 +246,8 @@ Submission ApiClient::getNextSubmission() {
             continue;  // Skip if program has no operations
           }
         } catch (const std::exception& e) {
-          Log::get().warn("Failed to parse program content: " + std::string(e.what()));
+          Log::get().warn("Failed to parse program content: " +
+                          std::string(e.what()));
           continue;  // Skip if parsing throws
         }
       }
