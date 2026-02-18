@@ -1,0 +1,35 @@
+name: Codecov
+
+on:
+  push:
+    branches: [ codecov ]
+  workflow_dispatch:
+
+jobs:
+  code-coverage:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
+      - name: Install external tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install pari-gp
+          # Install Lean 4 via elan (official installer)
+          curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y
+          source ~/.elan/env
+          echo "$HOME/.elan/bin" >> $GITHUB_PATH
+          gp --version
+          lean --version
+      - name: Generate
+        run: sudo apt install lcov && cd src && make -f Makefile.linux-x86.mk coverage
+        env:
+          LODA_TEST_WITH_EXTERNAL_TOOLS: 1
+      - name: Codecov
+        run: lcov --remove src/coverage/coverage-clean.info '*/src/gen/generator_v?.cpp' '*/src/cmd/benchmark.cpp' '*/src/cmd/boinc.cpp' -o src/coverage/coverage-codecov.info && bash <(curl -s https://codecov.io/bash) -f src/coverage/coverage-codecov.info -t ${{ secrets.CODECOV_TOKEN }} || echo "Codecov did not collect coverage reports"
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-coverage-report
+          path: src/coverage/
