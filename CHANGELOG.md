@@ -1,7 +1,18 @@
 ## [Unreleased]
 
+### Bugfixes
+
+* Fix `setup.json` loading
+* Reduce unnecessary JSON escaping
+
+## v26.3.1
+
+### Enhancements
+
+* Support `nrt` operation in LEAN formula generation
 * Improve `lex` range computation
-* Add term limit checks in formula generation to prevent exponential complexity growth (e.g., A042269)
+* Add term limit checks in formula generation to prevent exponential complexity growth
+* Migrate setup configuration from setup.txt to setup.json with automatic conversion
 
 ### Bugfixes
 
