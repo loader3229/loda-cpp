@@ -157,6 +157,7 @@ void Commands::update() {
   MineManager manager(settings);
   manager.update(true);
   manager.getStats();
+  manager.generateLists();
 }
 
 void Commands::upgrade() {
@@ -216,7 +217,7 @@ void Commands::check(const std::string& path) {
   }
   Evaluator evaluator(settings, EVAL_ALL, true);
   auto terms = seq.getTerms(SequenceUtil::FULL_SEQ_LENGTH);
-  auto num_required = SequenceProgram::getNumRequiredTerms(program);
+  auto num_required = 8;
   auto result = evaluator.check(program, terms, num_required, uid);
   switch (result.first) {
     case status_t::OK:
@@ -1113,7 +1114,6 @@ void Commands::extractVirseqs() {
   manager.load();
   auto& stats = manager.getStats();
   int64_t numExtracted = 0;
-
   for (const auto& seq : manager.getSequences()) {
     if (!stats.all_program_ids.exists(seq.id)) {
       continue;

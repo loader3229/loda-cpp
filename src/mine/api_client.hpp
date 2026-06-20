@@ -49,7 +49,6 @@ class ApiClient {
   std::vector<Submission> in_queue;
   std::vector<Program> out_queue;
   std::chrono::time_point<std::chrono::steady_clock> last_oeis_time;
-  bool printed_throttling_warning;
 
   void updateSession();
 
