@@ -1,6 +1,15 @@
 ## [Unreleased]
 
+## v26.6.27
+
+### Bugfixes
+
+* Fix an overflow bug
+
 ### Enhancements
+
+* Add `pushDownMov` optimization
+* Improve `pullUpMov` optimization
 * Add `clr` and `fil` support in incremental evaluator before main loop
 
 ## v26.6.7
