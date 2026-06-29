@@ -217,8 +217,7 @@ void Commands::check(const std::string& path) {
   }
   Evaluator evaluator(settings, EVAL_ALL, true);
   auto terms = seq.getTerms(SequenceUtil::FULL_SEQ_LENGTH);
-  auto num_required = 8;
-  auto result = evaluator.check(program, terms, num_required, uid);
+  auto result = evaluator.check(program, terms, 0, uid);
   switch (result.first) {
     case status_t::OK:
       std::cout << "ok" << std::endl;
