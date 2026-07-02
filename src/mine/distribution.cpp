@@ -1,5 +1,6 @@
 #include "mine/distribution.hpp"
 
+#include "lang/program_util.hpp"
 #include "sys/util.hpp"
 
 std::discrete_distribution<> uniformDist(size_t size) {
@@ -25,6 +26,9 @@ std::discrete_distribution<> operationDist(
         stats.num_ops_per_type.at(static_cast<size_t>(operation_types[i]));
     rate = std::max<int64_t>(1000000 / (rate + 1000), 1);
     p[i] = rate;
+    if (ProgramUtil::isWritingRegion(operation_types[i])) {
+      p[i] = 0;
+    }
   }
   return std::discrete_distribution<>(p.begin(), p.end());
 }
