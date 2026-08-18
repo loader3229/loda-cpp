@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+## v26.8.1
+
+### Enhancements
+
+* Increase lock timeout on Windows
+* Improve error message of submit command 
+* Minor log message enhancements
+
 ## v26.6.27
 
 ### Bugfixes
