@@ -4,8 +4,8 @@
 
 #include "lang/program_util.hpp"
 
-#define CONSTANTS_START -100
-#define CONSTANTS_END 1000
+#define CONSTANTS_START -30
+#define CONSTANTS_END 30
 
 Mutator::Mutator(const Stats &stats, double mutation_rate, bool mutate_comment)
     : random_program_ids(stats),

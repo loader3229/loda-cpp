@@ -655,6 +655,7 @@ void ProgramUtil::avoidNopOrOverflow(Operation& op) {
   if (op.source.type == Operand::Type::CONSTANT) {
     if (op.source.value == 0 &&
         (op.type == Operation::Type::ADD || op.type == Operation::Type::SUB ||
+         op.type == Operation::Type::BOR || op.type == Operation::Type::BXO ||
          op.type == Operation::Type::LPB)) {
       op.source.value = 1;
     }
@@ -662,7 +663,14 @@ void ProgramUtil::avoidNopOrOverflow(Operation& op) {
         (op.type == Operation::Type::MUL || op.type == Operation::Type::DIV ||
          op.type == Operation::Type::DIF || op.type == Operation::Type::DIR ||
          op.type == Operation::Type::MOD || op.type == Operation::Type::POW ||
-         op.type == Operation::Type::GCD || op.type == Operation::Type::BIN)) {
+         op.type == Operation::Type::GCD || op.type == Operation::Type::BIN ||
+         op.type == Operation::Type::FAC || op.type == Operation::Type::BAN || 
+         op.type == Operation::Type::LEX)) {
+      op.source.value = 2;
+    }
+    if ((op.source.value <= 1) &&
+        (op.type == Operation::Type::NRT || op.type == Operation::Type::DGS ||
+         op.type == Operation::Type::LOG || op.type == Operation::Type::DGR)) {
       op.source.value = 2;
     }
   } else if (op.source.type == Operand::Type::DIRECT) {
@@ -670,7 +678,12 @@ void ProgramUtil::avoidNopOrOverflow(Operation& op) {
         (op.type == Operation::Type::MOV || op.type == Operation::Type::DIV ||
          op.type == Operation::Type::DIF || op.type == Operation::Type::DIR ||
          op.type == Operation::Type::MOD || op.type == Operation::Type::GCD ||
-         op.type == Operation::Type::BIN)) {
+         op.type == Operation::Type::BOR || op.type == Operation::Type::BXO ||
+         op.type == Operation::Type::BIN || op.type == Operation::Type::LOG ||
+         op.type == Operation::Type::DGS || op.type == Operation::Type::DGR ||
+         op.type == Operation::Type::EQU || op.type == Operation::Type::NEQ ||
+         op.type == Operation::Type::LEQ || op.type == Operation::Type::GEQ ||
+         op.type == Operation::Type::MIN || op.type == Operation::Type::MAX)) {
       op.target.value += Number::ONE;
     }
   }

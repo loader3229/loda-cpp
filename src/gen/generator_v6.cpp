@@ -7,7 +7,7 @@
 
 GeneratorV6::GeneratorV6(const Config &config, const Stats &stats)
     : Generator(config, stats),
-      scheduler(60),  // 1 minute; magic number
+      scheduler(5),  // 1 minute; magic number
       mutator(stats, config.mutation_rate) {
   // get first program template
   nextProgram();
@@ -25,12 +25,18 @@ Program GeneratorV6::generateProgram() {
 
 void GeneratorV6::nextProgram() {
   Parser parser;
-  for (int64_t i = 0; i < 10; i++) {
+  for (int64_t i = 0; i < 100; i++) {
     const auto id = random_program_ids.get();
     const std::string path = ProgramUtil::getProgramPath(id);
     try {
       program = parser.parse(path);
       ProgramUtil::removeOps(program, Operation::Type::NOP);
+      if(program.ops.size() < 12 || ProgramUtil::hasRegionOperation(program)
+       || ProgramUtil::hasIndirectOperand(program)
+       || ProgramUtil::hasOp(program, Operation::Type::SEQ)
+       || ProgramUtil::hasOp(program, Operation::Type::LPB)){
+        i--; continue;
+       } 
       // Log::get().info("Loaded template: " + path);
       return;
     } catch (std::exception &) {

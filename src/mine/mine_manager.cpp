@@ -182,7 +182,7 @@ bool MineManager::shouldMatch(const ManagedSequence& seq) const {
       const bool should_overwrite =
           overwrite_list.find(seq.id) != overwrite_list.end();
       const bool is_complex =
-          stats->getTransitiveLength(seq.id) > 10;  // magic number
+          stats->getTransitiveLength(seq.id) > 9;  // magic number
       return is_complex || should_overwrite;
     }
   }
